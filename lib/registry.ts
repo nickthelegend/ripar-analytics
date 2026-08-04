@@ -31,9 +31,9 @@ export const LORA = "https://lora.algokit.io/testnet";
  * if the two ever disagree, the boxes are the tiebreak.
  */
 export const REGISTRIES = {
-  identity: 768_571_941,
-  reputation: 768_571_942,
-  validation: 768_571_946,
+  identity: 768_572_968,
+  reputation: 768_572_969,
+  validation: 768_572_979,
 } as const;
 
 /**
