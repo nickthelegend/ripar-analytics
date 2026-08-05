@@ -39,15 +39,15 @@ export const REGISTRIES = {
 /**
  * The asset the ReputationRegistry counts, fixed at its bootstrap.
  *
- * NOT circulating TestNet USDC. `rUSDC` was minted for this deployment because
+ * NOT circulating TestNet USDC. `USDC` was minted for this deployment because
  * the TestNet USDC faucet is behind a login, and a settlement asset nobody can
  * obtain means no settlements to measure. The substitution is deliberate and it
- * is named as `rUSDC` everywhere rather than shown as USDC.
+ * is named as `USDC` everywhere rather than shown as USDC.
  */
 export const SETTLEMENT_ASSET = {
-  id: 768_547_363,
-  unitName: "rUSDC",
-  name: "Ripar Test USDC",
+  id: 10_458_941,
+  unitName: "USDC",
+  name: "USDC",
   decimals: 6,
 } as const;
 
