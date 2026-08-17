@@ -159,13 +159,24 @@ function Axes({
   );
 }
 
+/**
+ * `height` is a CSS property here, not an SVG attribute.
+ *
+ * As an attribute it must be a LENGTH — `auto` is a CSS keyword and the parser
+ * rejects it, which is a real console error on every chart on the page:
+ * `<svg> attribute height: Expected length, "auto"`. It renders anyway, so the
+ * only symptom is the error.
+ *
+ * The responsive behaviour is unchanged and comes from the three that matter:
+ * `viewBox` fixes the coordinate system, `width: 100%` fills the container, and
+ * `preserveAspectRatio` scales the height to match.
+ */
 const svgProps = {
   viewBox: `0 0 ${W} ${H}`,
   width: "100%",
-  height: "auto",
   role: "img" as const,
   preserveAspectRatio: "xMidYMid meet",
-  style: { display: "block", overflow: "visible" as const },
+  style: { display: "block", height: "auto", overflow: "visible" as const },
 };
 
 function orderNote(byOrder: boolean, series: Series): string {
