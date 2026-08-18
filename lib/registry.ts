@@ -162,59 +162,82 @@ async function readJobs(): Promise<Job[]> {
 }
 
 /**
- * Every transfer of the settlement asset, oldest first.
+ * Every settlement-asset transfer touching a registered agent, oldest first.
  *
- * The asset endpoint returns results OLDEST-first and paginates by cursor;
- * `limit` is a page size, not a cap on the answer, so the cursor is followed to
- * the end rather than assuming one page is the whole story. The page budget is
- * a guard against an unbounded loop, and hitting it throws — a short list that
- * looks complete is the one failure this file must not produce.
+ * This used to enumerate the asset globally — `/v2/assets/{id}/transactions`,
+ * following the cursor to the end. That worked only because the settlement
+ * asset was a token minted for this project that nobody else moved. Against
+ * circulating TestNet USDC (10458941) the same query is effectively unbounded,
+ * so it hit its page budget and the whole section refused to render, correctly
+ * declining to chart a partial list as a complete one.
+ *
+ * Asking per registered address is not a workaround for that; it is the
+ * question this file actually wants answered. A settlement is defined below as
+ * a transfer between two addresses the IdentityRegistry knows, so every
+ * transfer between strangers was fetched and then discarded. Two agents means
+ * two bounded queries instead of one unbounded scan of an asset shared with the
+ * entire network.
+ *
+ * The page budget stays, and still throws. A short list that looks complete is
+ * the one failure this file must not produce.
  */
-async function readAssetTransfers(maxPages = 10, pageSize = 1000): Promise<Settlement[]> {
-  const out: Settlement[] = [];
-  let next: string | undefined;
+async function readAssetTransfers(
+  addresses: string[],
+  maxPages = 10,
+  pageSize = 1000,
+): Promise<Settlement[]> {
+  // A transfer between two registered agents is returned under BOTH accounts,
+  // so the same txId arrives twice and would be counted as two settlements.
+  const seen = new Map<string, Settlement>();
 
-  for (let page = 0; page < maxPages; page++) {
-    const body = await get<{
-      transactions?: Array<{
-        id?: string;
-        sender?: string;
-        "confirmed-round"?: number;
-        "round-time"?: number;
-        "asset-transfer-transaction"?: { amount?: number; receiver?: string };
-      }>;
-      "next-token"?: string;
-    }>(
-      `${TESTNET_INDEXER}/v2/assets/${SETTLEMENT_ASSET.id}/transactions` +
-        `?tx-type=axfer&limit=${pageSize}${next ? `&next=${encodeURIComponent(next)}` : ""}`,
-    );
+  for (const address of addresses) {
+    let next: string | undefined;
 
-    for (const t of body.transactions ?? []) {
-      const x = t["asset-transfer-transaction"];
-      const amountMicro = Number(x?.amount ?? 0);
-      // A zero-unit transfer is an opt-in. It is a real transaction and it is
-      // not a settlement; counting it would put a payment on the chart that
-      // paid for nothing.
-      if (!t.id || !x || amountMicro <= 0) continue;
-      out.push({
-        txId: t.id,
-        timestamp: Number(t["round-time"] ?? 0),
-        round: Number(t["confirmed-round"] ?? 0),
-        sender: t.sender ?? "",
-        receiver: x.receiver ?? "",
-        amountMicro,
-      });
-    }
+    for (let page = 0; ; page++) {
+      if (page >= maxPages) {
+        throw new Error(
+          `Transfers for ${address} did not finish within ${maxPages} pages; refusing to chart a partial list as a complete one`,
+        );
+      }
 
-    next = body["next-token"];
-    if (!next || (body.transactions ?? []).length === 0) {
-      return out.sort((a, b) => a.timestamp - b.timestamp || a.round - b.round);
+      const body = await get<{
+        transactions?: Array<{
+          id?: string;
+          sender?: string;
+          "confirmed-round"?: number;
+          "round-time"?: number;
+          "asset-transfer-transaction"?: { amount?: number; receiver?: string };
+        }>;
+        "next-token"?: string;
+      }>(
+        `${TESTNET_INDEXER}/v2/accounts/${address}/transactions` +
+          `?asset-id=${SETTLEMENT_ASSET.id}&tx-type=axfer&limit=${pageSize}` +
+          `${next ? `&next=${encodeURIComponent(next)}` : ""}`,
+      );
+
+      for (const t of body.transactions ?? []) {
+        const x = t["asset-transfer-transaction"];
+        const amountMicro = Number(x?.amount ?? 0);
+        // A zero-unit transfer is an opt-in. It is a real transaction and it is
+        // not a settlement; counting it would put a payment on the chart that
+        // paid for nothing.
+        if (!t.id || !x || amountMicro <= 0) continue;
+        seen.set(t.id, {
+          txId: t.id,
+          timestamp: Number(t["round-time"] ?? 0),
+          round: Number(t["confirmed-round"] ?? 0),
+          sender: t.sender ?? "",
+          receiver: x.receiver ?? "",
+          amountMicro,
+        });
+      }
+
+      next = body["next-token"];
+      if (!next || (body.transactions ?? []).length === 0) break;
     }
   }
 
-  throw new Error(
-    `The settlement-asset transfer list did not finish within ${maxPages} pages; refusing to chart a partial list as a complete one`,
-  );
+  return [...seen.values()].sort((a, b) => a.timestamp - b.timestamp || a.round - b.round);
 }
 
 /* ── series ────────────────────────────────────────────────────────────── */
@@ -277,11 +300,13 @@ export type RegistrySnapshot = {
  * with no activity, and those are opposite claims.
  */
 export async function readRegistrySnapshot(): Promise<RegistrySnapshot> {
-  const [agents, scores, jobs, transfers, status] = await Promise.all([
-    readAgents(),
+  // Transfers are looked up per registered address, so the agent list has to
+  // land first. Everything else still runs together.
+  const agents = await readAgents();
+  const [scores, jobs, transfers, status] = await Promise.all([
     readScores(),
     readJobs(),
-    readAssetTransfers(),
+    readAssetTransfers(agents.map((a) => a.address)),
     get<{ "last-round"?: number }>(`${TESTNET_ALGOD}/v2/status`).catch(() => ({ "last-round": undefined })),
   ]);
 
