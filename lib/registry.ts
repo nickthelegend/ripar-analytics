@@ -21,19 +21,31 @@ import algosdk from "algosdk";
 
 const { ABIType, encodeAddress } = algosdk;
 
-export const TESTNET_ALGOD = "https://testnet-api.algonode.cloud";
-export const TESTNET_INDEXER = "https://testnet-idx.algonode.cloud";
-export const LORA = "https://lora.algokit.io/testnet";
+export const TESTNET_ALGOD =
+  process.env.NEXT_PUBLIC_ALGOD_URL ?? "https://testnet-api.algonode.cloud";
+export const TESTNET_INDEXER =
+  process.env.NEXT_PUBLIC_INDEXER_URL ?? "https://testnet-idx.algonode.cloud";
+export const LORA =
+  process.env.NEXT_PUBLIC_EXPLORER_BASE ?? "https://lora.algokit.io/testnet";
 
 /**
  * The three registries, redeployed 4 Aug 2026 after an audit closed three
  * authorisation holes. Kept in step with `ripar-explorer/lib/registries.ts`;
  * if the two ever disagree, the boxes are the tiebreak.
  */
+// Env-overridable, with the live TestNet values as defaults. These were bare
+// literals, which made a MainNet cutover a code change in three repos rather
+// than a configuration change — and app ids are network-scoped, so 769444119
+// on MainNet is a stranger's contract, not this one.
+const appId = (v: string | undefined, fallback: number) => {
+  const n = Number(v);
+  return Number.isInteger(n) && n > 0 ? n : fallback;
+};
+
 export const REGISTRIES = {
-  identity: 769_444_119,
-  reputation: 769_444_120,
-  validation: 769_444_121,
+  identity: appId(process.env.NEXT_PUBLIC_IDENTITY_APP, 769_444_119),
+  reputation: appId(process.env.NEXT_PUBLIC_REPUTATION_APP, 769_444_120),
+  validation: appId(process.env.NEXT_PUBLIC_VALIDATION_APP, 769_444_121),
 } as const;
 
 /**
@@ -45,7 +57,7 @@ export const REGISTRIES = {
  * is named as `USDC` everywhere rather than shown as USDC.
  */
 export const SETTLEMENT_ASSET = {
-  id: 10_458_941,
+  id: appId(process.env.NEXT_PUBLIC_SETTLEMENT_ASSET, 10_458_941),
   unitName: "USDC",
   name: "USDC",
   decimals: 6,
