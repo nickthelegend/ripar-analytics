@@ -43,9 +43,9 @@ const appId = (v: string | undefined, fallback: number) => {
 };
 
 export const REGISTRIES = {
-  identity: appId(process.env.NEXT_PUBLIC_IDENTITY_APP, 769_444_119),
-  reputation: appId(process.env.NEXT_PUBLIC_REPUTATION_APP, 769_444_120),
-  validation: appId(process.env.NEXT_PUBLIC_VALIDATION_APP, 769_444_121),
+  identity: appId(process.env.NEXT_PUBLIC_IDENTITY_APP, 770_382_913),
+  reputation: appId(process.env.NEXT_PUBLIC_REPUTATION_APP, 770_382_914),
+  validation: appId(process.env.NEXT_PUBLIC_VALIDATION_APP, 770_382_915),
 } as const;
 
 /**
